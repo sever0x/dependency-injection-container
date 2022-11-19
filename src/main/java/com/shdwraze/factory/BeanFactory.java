@@ -12,12 +12,15 @@ import java.util.*;
 
 public class BeanFactory {
 
-    private Map<String, Object> beans;
+    private Map<Class<?>, Object> beans;
+
+    private Map<Object, Class<?>> implementedClasses;
 
     private Set<Class<?>> componentClasses;
 
     private BeanFactory() {
         beans = new HashMap<>();
+        implementedClasses = new HashMap<>();
         componentClasses = new HashSet<>();
     }
 
@@ -67,42 +70,62 @@ public class BeanFactory {
         for (Class<?> componentClass : componentClasses) {
             List<Constructor<?>> constructors = List.of(componentClass.getDeclaredConstructors());
 
+            Object instance;
             for (Constructor<?> constructor : constructors) {
                 if (!constructor.isAnnotationPresent(Autowired.class)) {
-                    createInstanceWithNoArgsConstructor(componentClass);
+                    instance = createInstanceWithNoArgsConstructor(componentClass);
                 } else {
                     System.out.println("@Autowired: " + constructor.getName());
-                    createAutowiredInstance(componentClass, constructor);
+                    instance = createAutowiredInstance(constructor);
                 }
+
+                beans.put(componentClass, instance);
+            }
+            getImplementedInterface(componentClass, beans.get(componentClass));
+        }
+    }
+
+    private void getImplementedInterface(Class<?> classObject, Object instance) {
+        List<Class<?>> interfaces = List.of(classObject.getInterfaces());
+
+        if (interfaces.size() > 0) {
+            for (Class<?> anInterface : interfaces) {
+                implementedClasses.put(instance, anInterface);
             }
         }
     }
 
     @SneakyThrows
-    private void createInstanceWithNoArgsConstructor(Class<?> classObject) {
-        Object instance = classObject.getConstructor().newInstance();
-
-        String className = classObject.getSimpleName();
-        String bean = className.substring(0, 1).toLowerCase() + className.substring(1);
-        beans.put(bean, instance);
+    private Object createInstanceWithNoArgsConstructor(Class<?> classObject) {
+        return classObject.getConstructor().newInstance();
     }
 
     @SneakyThrows
-    private void createAutowiredInstance(Class<?> classObject, Constructor<?> constructor) {
+    private Object createAutowiredInstance(Constructor<?> constructor) {
         List<Parameter> parameters = List.of(constructor.getParameters());
         for (Parameter parameter : parameters) {
             for (Object dependency : beans.values()) {
                 if (dependency.getClass().equals(parameter.getType())) {
-                    String objectName = classObject.getSimpleName();
-
-                    Object instance = constructor.newInstance(dependency);
-
-                    String bean = objectName.substring(0, 1).toLowerCase()
-                            + objectName.substring(1);
-                    beans.put(bean, instance);
+                    return constructor.newInstance(dependency);
                 }
             }
+            if (parameter.getType().isInterface()) {
+                return getBeanByInterface(parameter.getType(), constructor);
+            }
         }
+
+        return null;
+    }
+
+    @SneakyThrows
+    private Object getBeanByInterface(Class<?> anInterface, Constructor<?> constructor) {
+        for (Map.Entry<Object, Class<?>> entry : implementedClasses.entrySet()) {
+            if (entry.getValue().equals(anInterface)) {
+                return constructor.newInstance(entry.getKey());
+            }
+        }
+
+        return null;
     }
 
     private static class BeanFactoryInitialization {

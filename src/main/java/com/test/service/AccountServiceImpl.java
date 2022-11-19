@@ -12,10 +12,10 @@ public class AccountServiceImpl implements AccountService {
 
     private List<Account> accounts = new ArrayList<>();
 
-    private UserServiceImpl userService;
+    private UserService userService;
 
     @Autowired
-    public AccountServiceImpl(UserServiceImpl userService) {
+    public AccountServiceImpl(UserService userService) {
         this.userService = userService;
     }
 
