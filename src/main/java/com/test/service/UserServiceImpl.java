@@ -1,6 +1,6 @@
 package com.test.service;
 
-import com.shdwraze.stereotype.Component;
+import com.shdwraze.annotation.stereotype.Component;
 
 @Component
 public class UserServiceImpl implements UserService {

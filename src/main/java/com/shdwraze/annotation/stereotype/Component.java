@@ -1,4 +1,4 @@
-package com.shdwraze.stereotype;
+package com.shdwraze.annotation.stereotype;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

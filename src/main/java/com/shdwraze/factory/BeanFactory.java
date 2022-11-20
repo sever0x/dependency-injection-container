@@ -1,12 +1,14 @@
 package com.shdwraze.factory;
 
 import com.shdwraze.annotation.Autowired;
+import com.shdwraze.annotation.PostConstructor;
 import com.shdwraze.annotation.Qualifier;
-import com.shdwraze.stereotype.Component;
+import com.shdwraze.annotation.stereotype.Component;
 import lombok.SneakyThrows;
 
 import java.io.File;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.URL;
 import java.util.*;
@@ -77,6 +79,7 @@ public class BeanFactory {
                         if (instance != null) {
                             entry.setValue(Boolean.TRUE);
                             beans.put(classEntry, instance);
+                            invokePostConstructorMethod(instance);
                         }
                     }
                 }
@@ -141,6 +144,28 @@ public class BeanFactory {
                 implementedClasses.put(instance, anInterface);
             }
         }
+    }
+
+    @SneakyThrows
+    private void invokePostConstructorMethod(Object instance) {
+        List<Method> methodsWithPostConstructor = getPostConstructorMethods(instance.getClass());
+        if (methodsWithPostConstructor.size() == 1) {
+            Method method = methodsWithPostConstructor.get(0);
+            method.invoke(instance);
+        }
+    }
+
+    private List<Method> getPostConstructorMethods(Class<?> classObject) {
+        List<Method> allMethods = List.of(classObject.getMethods());
+        List<Method> methodsWithPostConstructor = new ArrayList<>();
+
+        for (Method method : allMethods) {
+            if (method.isAnnotationPresent(PostConstructor.class)) {
+                methodsWithPostConstructor.add(method);
+            }
+        }
+
+        return methodsWithPostConstructor;
     }
 
     private String getQualifierValue(Parameter parameter) {
