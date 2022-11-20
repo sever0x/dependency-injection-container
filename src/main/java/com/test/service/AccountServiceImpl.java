@@ -1,6 +1,7 @@
 package com.test.service;
 
 import com.shdwraze.annotation.Autowired;
+import com.shdwraze.annotation.Qualifier;
 import com.shdwraze.stereotype.Component;
 import com.test.model.Account;
 
@@ -15,7 +16,7 @@ public class AccountServiceImpl implements AccountService {
     private UserService userService;
 
     @Autowired
-    public AccountServiceImpl(UserService userService) {
+    public AccountServiceImpl(@Qualifier("UserServiceImpl") UserService userService) {
         this.userService = userService;
     }
 

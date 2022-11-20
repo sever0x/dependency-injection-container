@@ -1,6 +1,7 @@
 package com.shdwraze.factory;
 
 import com.shdwraze.annotation.Autowired;
+import com.shdwraze.annotation.Qualifier;
 import com.shdwraze.stereotype.Component;
 import lombok.SneakyThrows;
 
@@ -12,20 +13,20 @@ import java.util.*;
 
 public class BeanFactory {
 
-    private Map<Class<?>, Object> beans;
+    private final Map<Class<?>, Object> beans;
 
-    private Map<Object, Class<?>> implementedClasses;
+    private final Map<Object, Class<?>> implementedClasses;
 
-    private Set<Class<?>> componentClasses;
+    private final Map<Class<?>, Boolean> componentClasses;
 
     private BeanFactory() {
         beans = new HashMap<>();
         implementedClasses = new HashMap<>();
-        componentClasses = new HashSet<>();
+        componentClasses = new HashMap<>();
     }
 
     public static void run(Class<?> initClass) {
-        BeanFactoryInitialization.BEAN_FACTORY.instantiate(initClass.getPackageName());
+        BeanFactory.BeanFactoryInitialization.BEAN_FACTORY.instantiate(initClass.getPackageName());
     }
 
     @SneakyThrows
@@ -42,7 +43,6 @@ public class BeanFactory {
         }
 
         createInstance();
-        System.out.println(beans);
     }
 
     @SneakyThrows
@@ -55,9 +55,7 @@ public class BeanFactory {
                 Class<?> classObject = Class.forName(basePackage + "." + className);
 
                 if (classObject.isAnnotationPresent(Component.class)) {
-                    System.out.println("@Component: " + classObject);
-
-                    componentClasses.add(classObject);
+                    componentClasses.put(classObject, false);
                 }
             } else {
                 scanComponent(classFile, basePackage + "." + fileName);
@@ -65,32 +63,26 @@ public class BeanFactory {
         }
     }
 
-    @SneakyThrows
     private void createInstance() {
-        for (Class<?> componentClass : componentClasses) {
-            List<Constructor<?>> constructors = List.of(componentClass.getDeclaredConstructors());
+        while (componentClasses.containsValue(Boolean.FALSE)) {
+            for (Map.Entry<Class<?>, Boolean> entry : componentClasses.entrySet()) {
+                Class<?> classEntry = entry.getKey();
 
-            Object instance;
-            for (Constructor<?> constructor : constructors) {
-                if (!constructor.isAnnotationPresent(Autowired.class)) {
-                    instance = createInstanceWithNoArgsConstructor(componentClass);
-                } else {
-                    System.out.println("@Autowired: " + constructor.getName());
-                    instance = createAutowiredInstance(constructor);
+                if (entry.getValue().equals(Boolean.FALSE)) {
+                    for (Constructor<?> constructor : entry.getKey().getDeclaredConstructors()) {
+                        Object instance = !constructor.isAnnotationPresent(Autowired.class)
+                                ? createInstanceWithNoArgsConstructor(classEntry)
+                                : createAutowiredInstance(constructor);
+
+                        if (instance != null) {
+                            entry.setValue(Boolean.TRUE);
+                            beans.put(classEntry, instance);
+                        }
+                    }
                 }
-
-                beans.put(componentClass, instance);
-            }
-            getImplementedInterface(componentClass, beans.get(componentClass));
-        }
-    }
-
-    private void getImplementedInterface(Class<?> classObject, Object instance) {
-        List<Class<?>> interfaces = List.of(classObject.getInterfaces());
-
-        if (interfaces.size() > 0) {
-            for (Class<?> anInterface : interfaces) {
-                implementedClasses.put(instance, anInterface);
+                if (!implementedClasses.containsKey(beans.get(classEntry))) {
+                    getImplementedInterface(classEntry, beans.get(classEntry));
+                }
             }
         }
     }
@@ -110,7 +102,10 @@ public class BeanFactory {
                 }
             }
             if (parameter.getType().isInterface()) {
-                return getBeanByInterface(parameter.getType(), constructor);
+                if (parameter.isAnnotationPresent(Qualifier.class)) {
+                    return getBeanInstanceByName(getQualifierValue(parameter), constructor);
+                }
+                return getBeanInstanceByInterface(parameter.getType(), constructor);
             }
         }
 
@@ -118,7 +113,7 @@ public class BeanFactory {
     }
 
     @SneakyThrows
-    private Object getBeanByInterface(Class<?> anInterface, Constructor<?> constructor) {
+    private Object getBeanInstanceByInterface(Class<?> anInterface, Constructor<?> constructor) {
         for (Map.Entry<Object, Class<?>> entry : implementedClasses.entrySet()) {
             if (entry.getValue().equals(anInterface)) {
                 return constructor.newInstance(entry.getKey());
@@ -126,6 +121,30 @@ public class BeanFactory {
         }
 
         return null;
+    }
+
+    @SneakyThrows
+    private Object getBeanInstanceByName(String beanName, Constructor<?> constructor) {
+        for (Map.Entry<Class<?>, Object> entry : beans.entrySet()) {
+            if (entry.getKey().getSimpleName().equals(beanName)) {
+                return constructor.newInstance(entry.getValue());
+            }
+        }
+        return null;
+    }
+
+    private void getImplementedInterface(Class<?> classObject, Object instance) {
+        List<Class<?>> interfaces = List.of(classObject.getInterfaces());
+
+        if (interfaces.size() > 0) {
+            for (Class<?> anInterface : interfaces) {
+                implementedClasses.put(instance, anInterface);
+            }
+        }
+    }
+
+    private String getQualifierValue(Parameter parameter) {
+        return parameter.getDeclaredAnnotation(Qualifier.class).value();
     }
 
     private static class BeanFactoryInitialization {
