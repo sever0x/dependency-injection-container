@@ -28,6 +28,10 @@ public class AccountServiceImpl implements AccountService {
         return accounts;
     }
 
+    public void test() {
+        System.out.println("It's me");
+    }
+
     @Override
     public void createAccount(Account account) {
         accounts.add(account);
