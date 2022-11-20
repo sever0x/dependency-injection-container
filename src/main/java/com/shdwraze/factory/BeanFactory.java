@@ -1,14 +1,14 @@
 package com.shdwraze.factory;
 
 import com.shdwraze.annotation.Autowired;
-import com.shdwraze.annotation.PostConstructor;
 import com.shdwraze.annotation.Qualifier;
 import com.shdwraze.annotation.stereotype.Component;
+import com.shdwraze.factory.utils.BeanUtils;
+import com.shdwraze.factory.utils.ReflectionUtils;
 import lombok.SneakyThrows;
 
 import java.io.File;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.URL;
 import java.util.*;
@@ -21,14 +21,14 @@ public class BeanFactory {
 
     private final Map<Class<?>, Boolean> componentClasses;
 
-    private BeanFactory() {
+    protected BeanFactory() {
         beans = new HashMap<>();
         implementedClasses = new HashMap<>();
         componentClasses = new HashMap<>();
     }
 
     public static void run(Class<?> initClass) {
-        BeanFactory.BeanFactoryInitialization.BEAN_FACTORY.instantiate(initClass.getPackageName());
+        BeanFactoryInitialization.BEAN_FACTORY.instantiate(initClass.getPackageName());
     }
 
     @SneakyThrows
@@ -79,12 +79,12 @@ public class BeanFactory {
                         if (instance != null) {
                             entry.setValue(Boolean.TRUE);
                             beans.put(classEntry, instance);
-                            invokePostConstructorMethod(instance);
+                            ReflectionUtils.invokePostConstructorMethod(instance);
                         }
                     }
                 }
                 if (!implementedClasses.containsKey(beans.get(classEntry))) {
-                    getImplementedInterface(classEntry, beans.get(classEntry));
+                    BeanUtils.getImplementedInterface(classEntry, beans.get(classEntry), implementedClasses);
                 }
             }
         }
@@ -106,70 +106,13 @@ public class BeanFactory {
             }
             if (parameter.getType().isInterface()) {
                 if (parameter.isAnnotationPresent(Qualifier.class)) {
-                    return getBeanInstanceByName(getQualifierValue(parameter), constructor);
+                    return BeanUtils.getBeanInstanceByName(ReflectionUtils.getQualifierValue(parameter), constructor, beans);
                 }
-                return getBeanInstanceByInterface(parameter.getType(), constructor);
+                return BeanUtils.getBeanInstanceByInterface(parameter.getType(), constructor, implementedClasses);
             }
         }
 
         return null;
-    }
-
-    @SneakyThrows
-    private Object getBeanInstanceByInterface(Class<?> anInterface, Constructor<?> constructor) {
-        for (Map.Entry<Object, Class<?>> entry : implementedClasses.entrySet()) {
-            if (entry.getValue().equals(anInterface)) {
-                return constructor.newInstance(entry.getKey());
-            }
-        }
-
-        return null;
-    }
-
-    @SneakyThrows
-    private Object getBeanInstanceByName(String beanName, Constructor<?> constructor) {
-        for (Map.Entry<Class<?>, Object> entry : beans.entrySet()) {
-            if (entry.getKey().getSimpleName().equals(beanName)) {
-                return constructor.newInstance(entry.getValue());
-            }
-        }
-        return null;
-    }
-
-    private void getImplementedInterface(Class<?> classObject, Object instance) {
-        List<Class<?>> interfaces = List.of(classObject.getInterfaces());
-
-        if (interfaces.size() > 0) {
-            for (Class<?> anInterface : interfaces) {
-                implementedClasses.put(instance, anInterface);
-            }
-        }
-    }
-
-    @SneakyThrows
-    private void invokePostConstructorMethod(Object instance) {
-        List<Method> methodsWithPostConstructor = getPostConstructorMethods(instance.getClass());
-        if (methodsWithPostConstructor.size() == 1) {
-            Method method = methodsWithPostConstructor.get(0);
-            method.invoke(instance);
-        }
-    }
-
-    private List<Method> getPostConstructorMethods(Class<?> classObject) {
-        List<Method> allMethods = List.of(classObject.getMethods());
-        List<Method> methodsWithPostConstructor = new ArrayList<>();
-
-        for (Method method : allMethods) {
-            if (method.isAnnotationPresent(PostConstructor.class)) {
-                methodsWithPostConstructor.add(method);
-            }
-        }
-
-        return methodsWithPostConstructor;
-    }
-
-    private String getQualifierValue(Parameter parameter) {
-        return parameter.getDeclaredAnnotation(Qualifier.class).value();
     }
 
     private static class BeanFactoryInitialization {
